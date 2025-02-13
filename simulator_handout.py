@@ -165,30 +165,28 @@ class Simulator:
         :param event:
         :return:
         """
+        match event.event_type:
+            case Event.ENQUEUE:
+                # print("ENQUEUE to " + str(event.packet.source.node_id) + " at time " + str(self.clock))
+                self.schedule_event_after(Event(Event.TRANSMIT, event.packet.source, event.packet, self.clock + len(event.packet.source.output_queue) * self.transmission_delay), 
+                len(event.packet.source.output_queue)*self.transmission_delay) #schedule transmit event with respect to queueing delay
+                event.target_node.output_queue.append(event.packet) #add packet to output queue of source
 
-        # YOU NEED TO IMPLEMENT THIS METHOD
-        
-        if(event.event_type == Event.ENQUEUE):
-            # print("ENQUEUE to " + str(event.packet.source.node_id) + " at time " + str(self.clock))
-            self.schedule_event_after(Event(Event.TRANSMIT, event.packet.source, event.packet, self.clock + len(event.packet.source.output_queue) * self.transmission_delay), 
-                                        len(event.packet.source.output_queue)*self.transmission_delay) #schedule transmit event with respect to queueing delay
-            event.target_node.output_queue.append(event.packet) #add packet to output queue of source
-        
-        elif(event.event_type == Event.TRANSMIT):
-            # print("TRANSMIT packet " + str(event.packet.packet_id) + " at " + str(event.packet.source.node_id) + " at time " + str(event.time))
-            self.schedule_event_after(Event(Event.PROPAGATE, event.packet.source, event.packet, event.time + self.transmission_delay), self.transmission_delay) #schedule propagate event
-            self.clock += self.transmission_delay #increment clock by transmission delay
-        
-        elif(event.event_type == Event.PROPAGATE):
-            # print("PROPAGATE packet " + str(event.packet.packet_id) + " from " + str(event.packet.source.node_id) + " to " + str(event.packet.destination.node_id) + " at time " + str(event.time))
-            self.schedule_event_after(Event(Event.RECEIVE, event.packet.destination, event.packet, event.time + self.propagation_delay), 
-                                        self.propagation_delay) #schedule receive event with repect to propagation delay
-            event.packet.source.output_queue.remove(event.packet) #remove packet from output queue of source
-            self.clock += self.propagation_delay #increment clock by propagation delay
+            case Event.TRANSMIT:
+                # print("TRANSMIT packet " + str(event.packet.packet_id) + " at " + str(event.packet.source.node_id) + " at time " + str(event.time))
+                self.schedule_event_after(Event(Event.PROPAGATE, event.packet.source, event.packet, event.time + self.transmission_delay), self.transmission_delay) #schedule propagate event
+                self.clock += self.transmission_delay #increment clock by transmission delay
 
-        elif(event.event_type == Event.RECEIVE):
-            # print("Node " + str(event.packet.destination.node_id) + " RECIEVEs packet " + str(event.packet.packet_id) + " at time " + str(event.time))
-            pass
+            case Event.PROPAGATE:
+                # print("PROPAGATE packet " + str(event.packet.packet_id) + " from " + str(event.packet.source.node_id) + " to " + str(event.packet.destination.node_id) + " at time " + str(event.time))
+                self.schedule_event_after(Event(Event.RECEIVE, event.packet.destination, event.packet, event.time + self.propagation_delay), 
+                self.propagation_delay) #schedule receive event with repect to propagation delay
+                event.packet.source.output_queue.remove(event.packet) #remove packet from output queue of source
+                self.clock += self.propagation_delay #increment clock by propagation delay
+
+            case Event.RECEIVE:
+                # print("Node " + str(event.packet.destination.node_id) + " RECIEVEs packet " + str(event.packet.packet_id) + " at time " + str(event.time))
+                pass
 
         # self.print_event_queue()
         # print("A: " + str(self.nodes['A'].output_queue))
