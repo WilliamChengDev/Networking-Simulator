@@ -1,4 +1,5 @@
 import heapq
+import pandas as pd
 from typing import List
 
 
@@ -127,6 +128,7 @@ class Simulator:
         self.propagation_delay: int = propagation_delay
         self.clock = 0
         self.nodes = {}
+        self.link_data = pd.DataFrame({'Seq num.': [], 'Queue @A': [], 'Transmit @A': [], 'Propagate @A': [], 'Receive @B': []})
 
     def schedule_event_after(self, event: Event, delay: int):
         """
@@ -146,13 +148,14 @@ class Simulator:
         :return:
         """
         print('Starting simulation')
-        self.print_event_queue()
+        # self.print_event_queue()
         while len(self.event_queue) > 0:
             self.clock, _, event = heapq.heappop(self.event_queue)
-
-            print("Time: " + str(self.clock))
-            print(f'{str(event)}')
+            # print("Time: " + str(self.clock))
+            # print(f'{str(event)}')
             self.handle_event(event)
+            self.log_link_data(event) #log data for link experiment
+            self.link_data.to_csv('single_link.csv', index=False)
         print('Simulation ended')
 
     def handle_event(self, event):
@@ -166,32 +169,43 @@ class Simulator:
         # YOU NEED TO IMPLEMENT THIS METHOD
         
         if(event.event_type == Event.ENQUEUE):
-            print("ENQUEUE to " + str(event.packet.source.node_id) + " at time " + str(self.clock))
+            # print("ENQUEUE to " + str(event.packet.source.node_id) + " at time " + str(self.clock))
             self.schedule_event_after(Event(Event.TRANSMIT, event.packet.source, event.packet, self.clock + len(event.packet.source.output_queue) * self.transmission_delay), 
                                         len(event.packet.source.output_queue)*self.transmission_delay) #schedule transmit event with respect to queueing delay
             event.target_node.output_queue.append(event.packet) #add packet to output queue of source
         
-        if(event.event_type == Event.TRANSMIT):
-            print("TRANSMIT packet " + str(event.packet.packet_id) + " at " + str(event.packet.source.node_id) + " at time " + str(event.time))
+        elif(event.event_type == Event.TRANSMIT):
+            # print("TRANSMIT packet " + str(event.packet.packet_id) + " at " + str(event.packet.source.node_id) + " at time " + str(event.time))
             self.schedule_event_after(Event(Event.PROPAGATE, event.packet.source, event.packet, event.time + self.transmission_delay), self.transmission_delay) #schedule propagate event
             self.clock += self.transmission_delay #increment clock by transmission delay
         
-        if(event.event_type == Event.PROPAGATE):
-            print("PROPAGATE packet " + str(event.packet.packet_id) + " from " + str(event.packet.source.node_id) + " to " + str(event.packet.destination.node_id) + " at time " + str(event.time))
+        elif(event.event_type == Event.PROPAGATE):
+            # print("PROPAGATE packet " + str(event.packet.packet_id) + " from " + str(event.packet.source.node_id) + " to " + str(event.packet.destination.node_id) + " at time " + str(event.time))
             self.schedule_event_after(Event(Event.RECEIVE, event.packet.destination, event.packet, event.time + self.propagation_delay), 
                                         self.propagation_delay) #schedule receive event with repect to propagation delay
             event.packet.source.output_queue.remove(event.packet) #remove packet from output queue of source
             self.clock += self.propagation_delay #increment clock by propagation delay
 
-        if(event.event_type == Event.RECEIVE):
-            print("Node " + str(event.packet.destination.node_id) + " RECIEVEs packet " + str(event.packet.packet_id) + " at time " + str(event.time))
-        print(len(self.event_queue))
+        elif(event.event_type == Event.RECEIVE):
+            # print("Node " + str(event.packet.destination.node_id) + " RECIEVEs packet " + str(event.packet.packet_id) + " at time " + str(event.time))
+            pass
 
+        # self.print_event_queue()
+        # print("A: " + str(self.nodes['A'].output_queue))
+        # print("B: " + str(self.nodes['B'].output_queue))
+        # print("--------------------")
 
-        self.print_event_queue()
-        print("A: " + str(self.nodes['A'].output_queue))
-        print("B: " + str(self.nodes['B'].output_queue))
-        print("--------------------")
+    #logs the data into the dataframe for the link experiment
+    def log_link_data(self, event : Event):
+        match event.event_type:
+            case Event.ENQUEUE:
+                self.link_data.loc[len(self.link_data)] = {'Seq num.': event.packet.packet_id, 'Queue @A': event.time, 'Transmit @A': None, 'Propagate @A': None, 'Receive @B': None}
+            case Event.TRANSMIT:
+                self.link_data.loc[event.packet.packet_id, 'Transmit @A'] = event.time
+            case Event.PROPAGATE:
+                self.link_data.loc[event.packet.packet_id, 'Propagate @A'] = event.time
+            case Event.RECEIVE:
+                self.link_data.loc[event.packet.packet_id, 'Receive @B'] = event.time
 
     #prints the event queue
     def print_event_queue(self):
