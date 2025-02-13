@@ -1,7 +1,6 @@
 import heapq
-import pandas as pd
 from typing import List
-
+import pandas as pd
 
 class Node:
     """
@@ -132,7 +131,7 @@ class Simulator:
         self.clock = 0
         self.nodes = {}
         self.link_data = pd.DataFrame({'Seq num.': [], 'Queue @A': [], 'Transmit @A': [], 'Propagate @A': [], 'Receive @B': []})
-        self.switch_data = pd.DataFrame({'Seq num.': [], 'Source': [], 'Transmit @src': [], 'Receive @C': [], 'Transmit @C': [], 'Receive @D': []})
+        self.switch_data = pd.DataFrame({'Seq num.': [], 'Source': [], 'Queue @src':[], 'Transmit @src': [], 'Receive @C': [], 'Transmit @C': [], 'Receive @D': []})
 
     def schedule_event_after(self, event: Event, delay: int):
         """
@@ -151,8 +150,8 @@ class Simulator:
 
         :return:
         """
-        print('Starting simulation')
         if('C' not in self.nodes.keys()): #if running the link experiment
+            print('Starting link experiment simulation')
             # self.print_event_queue()
             while len(self.event_queue) > 0:
                 self.clock, _, event = heapq.heappop(self.event_queue)
@@ -161,8 +160,10 @@ class Simulator:
                 self.handle_event(event)
                 self.log_link_data(event) #log data for link experiment
                 self.link_data.to_csv('single_link.csv', index=False)
+            print(self.link_data)
 
         else: #if running the switch experiment
+            print('Starting switch experiment simulation')
             self.A_burst() #generate burst of packets at A
             self.B_burst() #generate burst of packets at B
             while len(self.event_queue) > 0:
@@ -172,6 +173,8 @@ class Simulator:
                 print("Time: " + str(self.clock))
                 print(f'{str(event)}')
                 self.handle_event(event)
+                self.log_switch_data(event)
+                self.switch_data.to_csv('switch.csv', index = False)
         print('Simulation ended')
 
     def A_burst(self, time=0):
@@ -233,13 +236,13 @@ class Simulator:
                                               len(event.packet.destination.output_queue)*self.transmission_delay) #queue it for transmission at C
                 self.clock += event.target_node.processing_delay #increment clock by processing delay
 
-        self.print_event_queue()
-        print("A: " + str(self.nodes['A'].output_queue))
-        print("B: " + str(self.nodes['B'].output_queue))
-        print("Cin: " + str(self.nodes['C'].input_queue))
-        print("Cout: " + str(self.nodes['C'].output_queue))
-        print("D: " + str(self.nodes['D'].output_queue))
-        print("--------------------")
+        # self.print_event_queue()
+        # print("A: " + str(self.nodes['A'].output_queue))
+        # print("B: " + str(self.nodes['B'].output_queue))
+        # print("Cin: " + str(self.nodes['C'].input_queue))
+        # print("Cout: " + str(self.nodes['C'].output_queue))
+        # print("D: " + str(self.nodes['D'].output_queue))
+        # print("--------------------")
 
     #logs the data into the dataframe for the link experiment
     def log_link_data(self, event : Event):
@@ -252,6 +255,20 @@ class Simulator:
                 self.link_data.loc[event.packet.packet_id, 'Propagate @A'] = event.time
             case Event.RECEIVE:
                 self.link_data.loc[event.packet.packet_id, 'Receive @B'] = event.time
+
+    #logs the data into the dataframe for the switch experiment
+    def log_switch_data(self, event: Event):
+        match event.event_type:
+            case Event.ENQUEUE:
+                self.switch_data.loc[len(self.switch_data)] = {'Seq num': event.packet.packet_id, 'Source': event.target_node.node_id, 'Queue @src':event.time, 'Transmit @src': None, 'Receive @C': None, 'Transmit @C': None, 'Receive @D': None}
+            case Event.TRANSMIT:
+                if event.target_node.node_id != 'C':
+                    self.switch_data.loc[event.packet.packet_id, 'Transmit @src'] = event.time
+                else: 
+                    self.switch_data.loc[event.packet.packet_id, 'Transmit @C'] = event.time
+            case Event.RECEIVE:
+                self.switch_data.loc[event.packet.packet_id, 'Recieve @' + event.target_node.node_id] = event.time
+
 
     #prints the event queue
     def print_event_queue(self):
