@@ -164,33 +164,29 @@ class Simulator:
 
         else: #if running the switch experiment
             print('Starting switch experiment simulation')
-            self.A_burst() #generate burst of packets at A
-            self.B_burst() #generate burst of packets at B
+            self.generate_packets() #generate burst of packets
             while len(self.event_queue) > 0:
                 self.clock, _, event = heapq.heappop(self.event_queue)
                 if(event.time > 10000): #end simulation after 10000 time units
                     break
-                print("Time: " + str(self.clock))
-                print(f'{str(event)}')
+                # print("Time: " + str(self.clock))
+                # print(f'{str(event)}')
                 self.handle_event(event)
                 self.log_switch_data(event)
-                self.switch_data.to_csv('switch.csv', index = False)
+            self.switch_data.sort_values(by="Seq num.", ascending=True)
+            self.switch_data.to_csv('switch.csv', index = False)
         print('Simulation ended')
 
-    def A_burst(self, time=0):
+    def generate_packets(self, time=0):
         A = self.nodes['A']
-        C = self.nodes['C']
-        while(time <= 10000): #if next burst is within simulation time
-            for _ in range(10):
-                self.schedule_event_after(Event(Event.ENQUEUE, A, Packet(A, C)), time)
-            time += 1000
-    
-    def B_burst(self, time=0):
         B = self.nodes['B']
         C = self.nodes['C']
         while(time <= 10000): #if next burst is within simulation time
             for _ in range(2):
                 self.schedule_event_after(Event(Event.ENQUEUE, B, Packet(B, C)), time)
+            if(time % 1000 == 0):
+                for _ in range(10):
+                    self.schedule_event_after(Event(Event.ENQUEUE, A, Packet(A, C)), time)
             time += 500
 
     def handle_event(self, event):
@@ -202,33 +198,33 @@ class Simulator:
         """
         match event.event_type:
             case Event.ENQUEUE:
-                print("ENQUEUE to " + str(event.packet.source.node_id) + " at time " + str(event.time))
+                # print("ENQUEUE to " + str(event.packet.source.node_id) + " at time " + str(event.time))
                 self.schedule_event_after(Event(Event.TRANSMIT, event.packet.source, event.packet, self.clock + len(event.packet.source.output_queue) * self.transmission_delay), 
                 len(event.packet.source.output_queue)*self.transmission_delay) #schedule transmit event with respect to queueing delay
                 event.target_node.output_queue.append(event.packet) #add packet to output queue of source
                 self.clock = event.time #increment clock by queueing time
 
             case Event.TRANSMIT:
-                print("TRANSMIT packet " + str(event.packet.packet_id) + " at " + str(event.packet.source.node_id) + " at time " + str(event.time))
+                # print("TRANSMIT packet " + str(event.packet.packet_id) + " at " + str(event.packet.source.node_id) + " at time " + str(event.time))
                 self.schedule_event_after(Event(Event.PROPAGATE, event.packet.source, event.packet, event.time + self.transmission_delay), self.transmission_delay) #schedule propagate event
                 self.clock += self.transmission_delay #increment clock by transmission delay
 
             case Event.PROPAGATE:
-                print("PROPAGATE packet " + str(event.packet.packet_id) + " from " + str(event.packet.source.node_id) + " to " + str(event.packet.destination.node_id) + " at time " + str(event.time))
+                # print("PROPAGATE packet " + str(event.packet.packet_id) + " from " + str(event.packet.source.node_id) + " to " + str(event.packet.destination.node_id) + " at time " + str(event.time))
                 self.schedule_event_after(Event(Event.RECEIVE, event.packet.destination, event.packet, event.time + self.propagation_delay), 
                 self.propagation_delay) #schedule receive event with repect to propagation delay
                 event.packet.source.output_queue.remove(event.packet) #remove packet from output queue of source
                 self.clock += self.propagation_delay #increment clock by propagation delay
 
             case Event.RECEIVE:
-                print("Node " + str(event.packet.destination.node_id) + " RECIEVEs packet " + str(event.packet.packet_id) + " at time " + str(event.time))
+                # print("Node " + str(event.packet.destination.node_id) + " RECIEVEs packet " + str(event.packet.packet_id) + " at time " + str(event.time))
                 if(event.packet.destination.node_id == 'C'): #if the packet arrived at a switch
                     self.schedule_event_after(Event(Event.PROCESS, event.packet.destination, event.packet, event.time + len(event.packet.destination.input_queue)), 
                                               len(event.packet.destination.input_queue)) #schedule process event with respect to processing delay
                     event.packet.destination.input_queue.append(event.packet) #add packet to input queue of switch
 
             case Event.PROCESS:
-                print("Switch C is processing packet " + str(event.packet.packet_id) + " at time " + str(event.time))
+                # print("Switch C is processing packet " + str(event.packet.packet_id) + " at time " + str(event.time))
                 event.packet.destination.input_queue.remove(event.packet) #remove packet from input queue of switch
                 event.packet.destination = self.nodes['D'] #change destination to D
                 event.packet.source = self.nodes['C'] #change source to C
@@ -236,6 +232,7 @@ class Simulator:
                                               len(event.packet.destination.output_queue)*self.transmission_delay) #queue it for transmission at C
                 self.clock += event.target_node.processing_delay #increment clock by processing delay
 
+        #for Debugging
         # self.print_event_queue()
         # print("A: " + str(self.nodes['A'].output_queue))
         # print("B: " + str(self.nodes['B'].output_queue))
@@ -260,16 +257,16 @@ class Simulator:
     def log_switch_data(self, event: Event):
         match event.event_type:
             case Event.ENQUEUE:
-                self.switch_data.loc[len(self.switch_data)] = {'Seq num': event.packet.packet_id, 'Source': event.target_node.node_id, 'Queue @src':event.time, 'Transmit @src': None, 'Receive @C': None, 'Transmit @C': None, 'Receive @D': None}
+                if event.target_node.node_id != 'C':
+                    self.switch_data.loc[event.packet.packet_id] = {'Seq num.': event.packet.packet_id, 'Source': event.target_node.node_id, 'Queue @src':event.time, 'Transmit @src': None, 'Receive @C': None, 'Transmit @C': None, 'Receive @D': None}
             case Event.TRANSMIT:
                 if event.target_node.node_id != 'C':
-                    self.switch_data.loc[event.packet.packet_id, 'Transmit @src'] = event.time
+                    self.switch_data.loc[self.switch_data['Seq num.'] == event.packet.packet_id, 'Transmit @src'] = event.time
                 else: 
                     self.switch_data.loc[event.packet.packet_id, 'Transmit @C'] = event.time
             case Event.RECEIVE:
-                self.switch_data.loc[event.packet.packet_id, 'Recieve @' + event.target_node.node_id] = event.time
-
-
+                self.switch_data.loc[self.switch_data['Seq num.'] == event.packet.packet_id, ('Receive @' + event.target_node.node_id)] = event.time
+        
     #prints the event queue
     def print_event_queue(self):
         print("event_queue: ", end='')
